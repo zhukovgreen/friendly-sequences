@@ -38,8 +38,8 @@ def test_works_with_non_iterable():
 
 def test_chaining():
     assert (
-        Seq((1, 2))
-        .zip(Seq((3, 4)))
+        Seq[int]((1, 2))
+        .zip(Seq[int]((3, 4)))
         .flat_map(lambda x: x)
         .filter(lambda x: x != 2)
         .sort()
