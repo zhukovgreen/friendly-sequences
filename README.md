@@ -15,7 +15,7 @@ assert (
            .filter(lambda x: x != 2)
            .sort()
            .map(str)
-           .reduce(lambda left, right: f"{left}{right}", "")
+           .fold(lambda left, right: f"{left}{right}", "")
        ) == "134"
 ```
 
