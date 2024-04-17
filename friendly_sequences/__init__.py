@@ -15,13 +15,11 @@ ReturnIterableType1 = PT.TypeVar("ReturnIterableType1")
 ReturnIterableType2 = PT.TypeVar("ReturnIterableType2")
 
 
-def to_iterable(el):
-    return iter(el) if hasattr(el, "__iter__") else iter((el,))
-
-
 @attrs.frozen(auto_attribs=True, slots=True)
 class Seq(Iterator, PT.Generic[IterableType1]):
-    some: Iterator[IterableType1] = attrs.field(converter=to_iterable)
+    some: Iterator[IterableType1] = attrs.field(
+        converter=lambda some: iter(some)
+    )
 
     def map(
         self,
@@ -46,12 +44,17 @@ class Seq(Iterator, PT.Generic[IterableType1]):
             )
         )
 
+    def flatten(
+        self,
+    ) -> "Seq[ReturnIterableType1]":
+        return Seq(itertools.chain.from_iterable(self))
+
     def filter(
         self, func: Callable[[IterableType1], bool]
     ) -> "Seq[IterableType1]":
         return Seq(filter(func, self))
 
-    def reduce(
+    def fold(
         self,
         func: Callable[
             [
@@ -66,6 +69,21 @@ class Seq(Iterator, PT.Generic[IterableType1]):
             func,
             self,
             initial,
+        )
+
+    def reduce(
+        self,
+        func: Callable[
+            [
+                ReturnIterableType1,
+                IterableType1,
+            ],
+            ReturnIterableType1,
+        ],
+    ) -> ReturnIterableType1:
+        return functools.reduce(
+            func,
+            self,
         )
 
     def take(self, n: int = 1) -> "Seq[IterableType1]":
