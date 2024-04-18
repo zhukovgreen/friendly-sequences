@@ -91,5 +91,5 @@ assert (
 ## Installation
 
 ```bash
-$ pip install freindly-sequences
+$ pip install friendly-sequences
 ```
