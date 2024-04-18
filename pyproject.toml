@@ -130,6 +130,7 @@ explicit_package_bases = true
 
 [tool.pdm.dev-dependencies]
 dev = [
+    "pytest>=7.3.1",
     "pre-commit>=2.21.0",
     "black>=23.3.0",
     "isort>=5.11.5",
@@ -149,8 +150,7 @@ authors = [
     { name = "zhukovgreen", email = "iam+friendly-sequences@zhukovgreen.pro" },
 ]
 dependencies = [
-    "pytest>=7.3.1",
-    "attrs>=23.2.0",
+    "attrs>=21.3.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
