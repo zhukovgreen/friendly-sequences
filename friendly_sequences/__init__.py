@@ -7,12 +7,15 @@ from collections.abc import Callable, Iterator
 
 import attrs
 
+from typing_extensions import TypeVarTuple
+
 
 __all__ = ("Seq",)
 
 IterableType1 = PT.TypeVar("IterableType1")
 IterableType2 = PT.TypeVar("IterableType2")
 IterableType3 = PT.TypeVar("IterableType3")
+IterableType4 = TypeVarTuple("IterableType4")
 ReturnIterableType1 = PT.TypeVar("ReturnIterableType1")
 ReturnIterableType2 = PT.TypeVar("ReturnIterableType2")
 ReturnIterableType3 = PT.TypeVar("ReturnIterableType3")
@@ -46,6 +49,13 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
                 itertools.chain.from_iterable(self),
             )
         )
+
+    def starmap(
+        # py310 not supporting this syntax and we're adding type ignore
+        self: "Seq[tuple[*IterableType4]]",  # type: ignore
+        func: Callable[[*IterableType4], ReturnIterableType1],
+    ) -> "Seq[ReturnIterableType1]":
+        return Seq(itertools.starmap(func, self))
 
     def flatten(
         self: "Seq[tuple[IterableType2, ...]]",
@@ -135,8 +145,10 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
     def head(self) -> IterableType1:
         return next(self.take())
 
-    def __iter__(self) -> Iterator[IterableType1]:  # noqa: PYI034
+    def __iter__(  # noqa: PYI034
+        self: "Seq[IterableType1]",
+    ) -> Iterator[IterableType1]:
         return self
 
-    def __next__(self) -> IterableType1:
+    def __next__(self: "Seq[IterableType1]") -> IterableType1:
         return next(self.some)

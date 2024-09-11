@@ -121,7 +121,7 @@ warn_no_return = true
 warn_redundant_casts = true
 warn_unreachable = true
 warn_unused_configs = true
-warn_unused_ignores = true
+warn_unused_ignores = false
 namespace_packages = true
 explicit_package_bases = true
 

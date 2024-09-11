@@ -46,6 +46,15 @@ def test_flatten():
     assert Seq(((1, 2), (3, 4))).flatten().to_tuple() == (1, 2, 3, 4)
 
 
+def test_starmap():
+    def foo(a: str, b: int) -> str:
+        return a + str(b)
+
+    assert Seq[tuple[str, int]]((("a", 1), ("b", 2))).starmap(
+        foo
+    ).to_tuple() == ("a1", "b2")
+
+
 def test_exhaust():
     class Switch:
         on: bool = False
