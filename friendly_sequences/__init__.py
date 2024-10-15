@@ -119,8 +119,16 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
     def zip(
         self: "Seq[IterableType1]",
         seq: "Seq[IterableType2]",
+        *,
+        strict: bool = False,
     ) -> "Seq[tuple[IterableType1, IterableType2]]":
-        return Seq(zip(self, seq))  # noqa: B905
+        return Seq(
+            zip(
+                self,
+                seq,
+                strict=strict,
+            )
+        )
 
     def sum(self) -> IterableType1:
         return PT.cast(IterableType1, sum(self))
