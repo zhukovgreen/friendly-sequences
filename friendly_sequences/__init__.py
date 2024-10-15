@@ -3,7 +3,7 @@ import itertools
 import typing as PT
 
 from collections import deque
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
 import attrs
 
@@ -118,7 +118,7 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
 
     def zip(
         self: "Seq[IterableType1]",
-        seq: "Seq[IterableType2]",
+        seq: "Iterable[IterableType2]",
         *,
         strict: bool = False,
     ) -> "Seq[tuple[IterableType1, IterableType2]]":
