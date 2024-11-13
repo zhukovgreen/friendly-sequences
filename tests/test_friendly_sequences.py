@@ -1,3 +1,5 @@
+from typing import TypeGuard
+
 from friendly_sequences import Seq
 
 
@@ -31,11 +33,14 @@ def test_usage():
 
 
 def test_chaining():
+    def filter_expr(i: int) -> TypeGuard[int]:
+        return i != 2
+
     assert (
         Seq[int]((1, 2))
         .zip(Seq[int]((3, 4)))
         .flat_map(lambda x: x)
-        .filter(lambda x: x != 2)
+        .filter(filter_expr)
         .sort()
         .map(str)
         .fold(lambda left, right: f"{left}{right}", "")

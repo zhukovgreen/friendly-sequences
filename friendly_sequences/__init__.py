@@ -63,8 +63,8 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
         return Seq(itertools.chain.from_iterable(self))
 
     def filter(
-        self, func: Callable[[IterableType1], bool]
-    ) -> "Seq[IterableType1]":
+        self, func: Callable[[IterableType1], PT.TypeGuard[IterableType2]]
+    ) -> "Seq[IterableType2]":
         return Seq(filter(func, self))
 
     def fold(
