@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import itertools
 import typing as PT
@@ -7,42 +9,59 @@ from collections.abc import Callable, Iterable, Iterator
 
 import attrs
 
-from typing_extensions import TypeVarTuple
+from typing_extensions import TypeVarTuple, Unpack
 
 
 __all__ = ("Seq",)
 
-IterableType1 = PT.TypeVar("IterableType1")
-IterableType2 = PT.TypeVar("IterableType2")
-IterableType3 = PT.TypeVar("IterableType3")
-IterableType4 = TypeVarTuple("IterableType4")
-ReturnIterableType1 = PT.TypeVar("ReturnIterableType1")
-ReturnIterableType2 = PT.TypeVar("ReturnIterableType2")
-ReturnIterableType3 = PT.TypeVar("ReturnIterableType3")
+T = PT.TypeVar("T")
+U = PT.TypeVar("U")
+V = PT.TypeVar("V")
+K = PT.TypeVar("K")
+Ts = TypeVarTuple("Ts")
 
 
-@attrs.frozen(auto_attribs=True, slots=True)
-class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
-    some: Iterator[IterableType1] = attrs.field(
-        converter=lambda some: iter(some)
-    )
+@attrs.frozen(
+    auto_attribs=True,
+    slots=True,
+)
+class Seq(Iterator[T]):
+    """Simple way to build type-safe functions pipelines.
+
+    Example:
+
+    >>> from typing import TypeGuard
+
+    >>> from friendly_sequences import Seq
+    >>>
+    >>>
+    >>> def filter_expr(i: int) -> TypeGuard[int]:
+    >>>     return i != 2
+
+    >>> assert (
+    >>>     Seq[int]((1, 2))
+    >>>     .zip(Seq[int]((3, 4)))
+    >>>     .flat_map(lambda x: x + 1)
+    >>>     .filter(filter_expr)
+    >>>     .sort(reverse=True)
+    >>>     .map(str)
+    >>>     .fold(lambda left, right: f"{left}{right}", "")
+    >>> ) == "543"
+
+    """
+
+    some: Iterator[T] = attrs.field(converter=lambda some: iter(some))
 
     def map(
-        self,
-        func: Callable[
-            [IterableType1],
-            ReturnIterableType1,
-        ],
-    ) -> "Seq[ReturnIterableType1]":
+        self: Seq[T],
+        func: Callable[[T], U],
+    ) -> Seq[U]:
         return Seq(map(func, self))
 
     def flat_map(
-        self: "Seq[tuple[IterableType2, ...]]",
-        func: Callable[
-            [IterableType2],
-            ReturnIterableType2,
-        ],
-    ) -> "Seq[ReturnIterableType2]":
+        self: Seq[tuple[V, ...]],
+        func: Callable[[V], U],
+    ) -> Seq[U]:
         return Seq(
             map(
                 func,
@@ -51,33 +70,27 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
         )
 
     def starmap(
-        # py310 not supporting this syntax and we're adding type ignore
-        self: "Seq[tuple[*IterableType4]]",  # type: ignore
-        func: Callable[[*IterableType4], ReturnIterableType1],
-    ) -> "Seq[ReturnIterableType1]":
+        self: Seq[tuple[Unpack[Ts]]],
+        func: Callable[[Unpack[Ts]], U],
+    ) -> Seq[U]:
         return Seq(itertools.starmap(func, self))
 
     def flatten(
-        self: "Seq[tuple[IterableType2, ...]]",
-    ) -> "Seq[IterableType2]":
+        self: Seq[tuple[V, ...]],
+    ) -> Seq[V]:
         return Seq(itertools.chain.from_iterable(self))
 
     def filter(
-        self, func: Callable[[IterableType1], PT.TypeGuard[IterableType2]]
-    ) -> "Seq[IterableType2]":
+        self: Seq[T],
+        func: Callable[[T], PT.TypeGuard[U]],
+    ) -> Seq[U]:
         return Seq(filter(func, self))
 
     def fold(
-        self,
-        func: Callable[
-            [
-                ReturnIterableType1,
-                IterableType1,
-            ],
-            ReturnIterableType1,
-        ],
-        initial: ReturnIterableType1,
-    ) -> ReturnIterableType1:
+        self: Seq[T],
+        func: Callable[[U, T], U],
+        initial: U,
+    ) -> U:
         return functools.reduce(
             func,
             self,
@@ -85,29 +98,26 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
         )
 
     def reduce(
-        self,
-        func: Callable[
-            [
-                IterableType1,
-                IterableType1,
-            ],
-            IterableType1,
-        ],
-    ) -> IterableType1:
+        self: Seq[T],
+        func: Callable[[T, T], T],
+    ) -> T:
         return functools.reduce(
             func,
             self,
         )
 
-    def take(self, n: int = 1) -> "Seq[IterableType1]":
+    def take(
+        self: Seq[T],
+        n: int = 1,
+    ) -> Seq[T]:
         return Seq(itertools.islice(self, n))
 
     def sort(
-        self,
+        self: Seq[T],
         *,
         key: None = None,
         reverse: bool = False,
-    ) -> "Seq[IterableType1]":
+    ) -> Seq[T]:
         return Seq(
             sorted(
                 self,
@@ -117,11 +127,11 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
         )
 
     def zip(
-        self: "Seq[IterableType1]",
-        seq: "Iterable[IterableType2]",
+        self: Seq[T],
+        seq: Iterable[V],
         *,
         strict: bool = False,
-    ) -> "Seq[tuple[IterableType1, IterableType2]]":
+    ) -> Seq[tuple[T, V]]:
         return Seq(
             zip(
                 self,
@@ -130,33 +140,53 @@ class Seq(Iterator[IterableType1], PT.Generic[IterableType1]):
             )
         )
 
-    def sum(self) -> IterableType1:
-        return PT.cast(IterableType1, sum(self))
+    def sum(
+        self: Seq[T],
+    ) -> T:
+        return PT.cast(T, sum(self))
 
-    def to_tuple(self) -> tuple[IterableType1, ...]:
+    def to_tuple(
+        self: Seq[T],
+    ) -> tuple[T, ...]:
         return tuple(self)
 
-    def to_list(self) -> list[IterableType1]:
+    def to_list(
+        self: Seq[T],
+    ) -> list[T]:
         return list(self)
 
     def to_dict(
-        self: "Seq[tuple[IterableType2, IterableType3]]",
-    ) -> dict[IterableType2, IterableType3]:
+        self: Seq[tuple[V, K]],
+    ) -> dict[V, K]:
         return dict(self)
 
-    def exhaust(self) -> None:
+    def exhaust(
+        self: Seq[T],
+    ) -> None:
         deque(self, 0)
 
-    def consume(self) -> None:
-        return self.exhaust()  # pragma: nocover
+    def consume(
+        self: Seq[T],
+    ) -> None:
+        self.exhaust()  # pragma: nocover
 
-    def head(self) -> IterableType1:
+    def head(
+        self: Seq[T],
+    ) -> T:
         return next(self.take())
 
+    def join(
+        self: Seq[str],
+        with_: str = "",
+    ) -> str:
+        return with_.join(self)
+
     def __iter__(  # noqa: PYI034
-        self: "Seq[IterableType1]",
-    ) -> Iterator[IterableType1]:
+        self: Seq[T],
+    ) -> Iterator[T]:
         return self
 
-    def __next__(self: "Seq[IterableType1]") -> IterableType1:
+    def __next__(
+        self: Seq[T],
+    ) -> T:
         return next(self.some)

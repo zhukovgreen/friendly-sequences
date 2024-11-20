@@ -21,7 +21,7 @@ def test_usage():
         .sum()
         == 14
     )
-    assert "".join(Seq("cba").sort()) == "abc"
+    assert Seq("cba").sort().join() == "abc"
     assert (
         Seq((1, 2))
         .zip(Seq((3, 4)))
@@ -39,12 +39,12 @@ def test_chaining():
     assert (
         Seq[int]((1, 2))
         .zip(Seq[int]((3, 4)))
-        .flat_map(lambda x: x)
+        .flat_map(lambda x: x + 1)
         .filter(filter_expr)
-        .sort()
+        .sort(reverse=True)
         .map(str)
         .fold(lambda left, right: f"{left}{right}", "")
-    ) == "134"
+    ) == "543"
 
 
 def test_flatten():
