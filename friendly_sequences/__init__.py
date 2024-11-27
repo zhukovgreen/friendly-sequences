@@ -82,7 +82,7 @@ class Seq(Iterator[T]):
 
     def filter(
         self: Seq[T],
-        func: Callable[[T], PT.TypeGuard[U]],
+        func: Callable[[T], PT.TypeGuard[U] | bool],
     ) -> Seq[U]:
         return Seq(filter(func, self))
 
