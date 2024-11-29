@@ -181,6 +181,16 @@ class Seq(Iterator[T]):
     ) -> str:
         return with_.join(self)
 
+    def all(
+        self: Seq[T],
+    ) -> bool:
+        return all(self)
+
+    def any(
+        self: Seq[T],
+    ) -> bool:
+        return any(self)
+
     def __iter__(  # noqa: PYI034
         self: Seq[T],
     ) -> Iterator[T]:
