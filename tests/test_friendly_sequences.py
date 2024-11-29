@@ -31,6 +31,10 @@ def test_usage():
         .reduce(lambda left, right: left + right)
     ) == "1234"
 
+    assert Seq((1, 2, 3)).map(lambda x: x // 2 == 0).all() is False
+    assert Seq((2, 4, 6)).map(lambda x: x // 2 == 0).all() is False
+    assert Seq((1, 2, 3)).map(lambda x: x // 2 == 0).any() is True
+
 
 def test_chaining():
     def filter_expr(i: int) -> TypeGuard[int]:
