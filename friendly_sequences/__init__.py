@@ -14,7 +14,7 @@ from typing_extensions import TypeVarTuple, Unpack
 
 __all__ = ("Seq",)
 
-T = PT.TypeVar("T")
+T_co = PT.TypeVar("T_co", covariant=True)
 U = PT.TypeVar("U")
 V = PT.TypeVar("V")
 K = PT.TypeVar("K")
@@ -25,7 +25,7 @@ Ts = TypeVarTuple("Ts")
     auto_attribs=True,
     slots=True,
 )
-class Seq(Iterator[T]):
+class Seq(Iterator[T_co]):
     """Simple way to build type-safe functions pipelines.
 
     Example:
@@ -50,16 +50,16 @@ class Seq(Iterator[T]):
 
     """
 
-    some: Iterator[T] = attrs.field(converter=lambda some: iter(some))
+    some: Iterator[T_co] = attrs.field(converter=lambda some: iter(some))
 
     def map(
-        self: Seq[T],
-        func: Callable[[T], U],
+        self: Seq[T_co],
+        func: Callable[[T_co], U],
     ) -> Seq[U]:
         return Seq(map(func, self))
 
     def flat_map(
-        self: Seq[tuple[V, ...]],
+        self: Seq[Iterable[V]],
         func: Callable[[V], U],
     ) -> Seq[U]:
         return Seq(
@@ -81,14 +81,14 @@ class Seq(Iterator[T]):
         return Seq(itertools.chain.from_iterable(self))
 
     def filter(
-        self: Seq[T],
-        func: Callable[[T], PT.TypeGuard[U] | bool],
+        self: Seq[T_co],
+        func: Callable[[T_co], PT.TypeGuard[U] | bool],
     ) -> Seq[U]:
         return Seq(filter(func, self))
 
     def fold(
-        self: Seq[T],
-        func: Callable[[U, T], U],
+        self: Seq[T_co],
+        func: Callable[[U, T_co], U],
         initial: U,
     ) -> U:
         return functools.reduce(
@@ -98,26 +98,26 @@ class Seq(Iterator[T]):
         )
 
     def reduce(
-        self: Seq[T],
-        func: Callable[[T, T], T],
-    ) -> T:
+        self: Seq[T_co],
+        func: Callable[[T_co, T_co], T_co],
+    ) -> T_co:
         return functools.reduce(
             func,
             self,
         )
 
     def take(
-        self: Seq[T],
+        self: Seq[T_co],
         n: int = 1,
-    ) -> Seq[T]:
+    ) -> Seq[T_co]:
         return Seq(itertools.islice(self, n))
 
     def sort(
-        self: Seq[T],
+        self: Seq[T_co],
         *,
         key: None = None,
         reverse: bool = False,
-    ) -> Seq[T]:
+    ) -> Seq[T_co]:
         return Seq(
             sorted(
                 self,
@@ -127,11 +127,11 @@ class Seq(Iterator[T]):
         )
 
     def zip(
-        self: Seq[T],
+        self: Seq[T_co],
         seq: Iterable[V],
         *,
         strict: bool = False,
-    ) -> Seq[tuple[T, V]]:
+    ) -> Seq[tuple[T_co, V]]:
         return Seq(
             zip(
                 self,
@@ -141,18 +141,18 @@ class Seq(Iterator[T]):
         )
 
     def sum(
-        self: Seq[T],
-    ) -> T:
-        return PT.cast(T, sum(self))
+        self: Seq[T_co],
+    ) -> T_co:
+        return PT.cast(T_co, sum(self))
 
     def to_tuple(
-        self: Seq[T],
-    ) -> tuple[T, ...]:
+        self: Seq[T_co],
+    ) -> tuple[T_co, ...]:
         return tuple(self)
 
     def to_list(
-        self: Seq[T],
-    ) -> list[T]:
+        self: Seq[T_co],
+    ) -> list[T_co]:
         return list(self)
 
     def to_dict(
@@ -161,18 +161,18 @@ class Seq(Iterator[T]):
         return dict(self)
 
     def exhaust(
-        self: Seq[T],
+        self: Seq[T_co],
     ) -> None:
         deque(self, 0)
 
     def consume(
-        self: Seq[T],
+        self: Seq[T_co],
     ) -> None:
         self.exhaust()  # pragma: nocover
 
     def head(
-        self: Seq[T],
-    ) -> T:
+        self: Seq[T_co],
+    ) -> T_co:
         return next(self.take())
 
     def join(
@@ -182,21 +182,21 @@ class Seq(Iterator[T]):
         return with_.join(self)
 
     def all(
-        self: Seq[T],
+        self: Seq[T_co],
     ) -> bool:
         return all(self)
 
     def any(
-        self: Seq[T],
+        self: Seq[T_co],
     ) -> bool:
         return any(self)
 
     def __iter__(  # noqa: PYI034
-        self: Seq[T],
-    ) -> Iterator[T]:
+        self: Seq[T_co],
+    ) -> Iterator[T_co]:
         return self
 
     def __next__(
-        self: Seq[T],
-    ) -> T:
+        self: Seq[T_co],
+    ) -> T_co:
         return next(self.some)
