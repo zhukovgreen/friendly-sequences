@@ -64,6 +64,20 @@ def test_starmap():
     ).to_tuple() == ("a1", "b2")
 
 
+def test_flatmap():
+    def foo(s: str) -> str:
+        return f"{s}!"
+
+    assert Seq[tuple[str]]((("a",), ("b",))).flat_map(foo).to_tuple() == (
+        "a!",
+        "b!",
+    )
+    assert Seq[Seq[str]](Seq((("a",), ("b",)))).flat_map(foo).to_tuple() == (
+        "a!",
+        "b!",
+    )
+
+
 def test_exhaust():
     class Switch:
         on: bool = False
