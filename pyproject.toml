@@ -37,6 +37,7 @@ ignore = [
     "D102", #  If code is fully typed there are a lot of cases when we don't need docstrings. Missing docstring in public method
     "D105", # Why we would need: Missing docstring in magic method
     "EM101", # Exception must not use a string literal, assign to variable first
+    "TC006", # [*] Add quotes to type expression in `typing.cast()`
 ]
 select = [
     "ALL",
