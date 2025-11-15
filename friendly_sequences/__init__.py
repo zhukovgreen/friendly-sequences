@@ -128,14 +128,13 @@ class Seq(Iterator[T_co]):
 
     def zip(
         self: Seq[T_co],
-        seq: Iterable[V],
-        *,
+        *seq: Iterable[V],
         strict: bool = False,
     ) -> Seq[tuple[T_co, V]]:
         return Seq(
             zip(
                 self,
-                seq,
+                *seq,
                 strict=strict,
             )
         )
