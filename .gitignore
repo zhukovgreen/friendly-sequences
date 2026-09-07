@@ -172,3 +172,4 @@ mlruns/
 spark-warehouse/
 .pdm-build
 /.venv*/
+.claude/.a2a-*/
