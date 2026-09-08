@@ -1,3 +1,5 @@
+import asyncio
+
 from typing import TypeGuard
 
 import pytest
@@ -33,7 +35,12 @@ async def test_map_with_async_callable():
 async def test_flat_map_with_sync_callable_over_sync_iterables():
     assert await AsyncSeq(((1, 2), (3, 4))).flat_map(
         add_one_sync
-    ).to_tuple() == (2, 3, 4, 5)
+    ).to_tuple() == (
+        2,
+        3,
+        4,
+        5,
+    )
 
 
 async def test_flat_map_with_async_callable_over_sync_iterables():
@@ -63,7 +70,10 @@ async def test_starmap_with_sync_callable():
 
     assert await AsyncSeq((("a", 1), ("b", 2))).starmap(
         combine
-    ).to_tuple() == ("a1", "b2")
+    ).to_tuple() == (
+        "a1",
+        "b2",
+    )
 
 
 async def test_starmap_with_async_callable():
@@ -72,7 +82,10 @@ async def test_starmap_with_async_callable():
 
     assert await AsyncSeq((("a", 1), ("b", 2))).starmap(
         combine
-    ).to_tuple() == ("a1", "b2")
+    ).to_tuple() == (
+        "a1",
+        "b2",
+    )
 
 
 async def test_flatten_over_sync_iterables():
@@ -87,7 +100,12 @@ async def test_flatten_over_sync_iterables():
 async def test_flatten_over_async_iterables():
     assert await AsyncSeq(
         (gen_range(1, 2), gen_range(3, 4))
-    ).flatten().to_tuple() == (1, 2, 3, 4)
+    ).flatten().to_tuple() == (
+        1,
+        2,
+        3,
+        4,
+    )
 
 
 async def test_filter_with_sync_typeguard():
@@ -193,11 +211,15 @@ async def test_zip_strict_raises_when_right_longer():
 
 async def test_zip_strict_raises_when_third_argument_is_longer():
     with pytest.raises(ValueError, match=r"zip\(\) argument 3 is longer"):
-        await AsyncSeq((1, 2)).zip(
-            AsyncSeq((3, 4)),
-            AsyncSeq((5, 6, 7)),
-            strict=True,
-        ).to_tuple()
+        await (
+            AsyncSeq((1, 2))
+            .zip(
+                AsyncSeq((3, 4)),
+                AsyncSeq((5, 6, 7)),
+                strict=True,
+            )
+            .to_tuple()
+        )
 
 
 async def test_sum():
@@ -330,3 +352,208 @@ async def test_aclose_propagates_to_upstream_source():
 
     await seq.aclose()
     assert closed_count == 1
+
+
+async def test_map_concurrent_with_sync_callable():
+    assert await AsyncSeq((1, 2, 3)).map_concurrent(
+        add_one_sync
+    ).to_tuple() == (
+        2,
+        3,
+        4,
+    )
+
+
+async def test_map_concurrent_with_async_callable():
+    assert await AsyncSeq((1, 2, 3)).map_concurrent(add_one).to_tuple() == (
+        2,
+        3,
+        4,
+    )
+
+
+async def test_map_unordered_with_sync_callable():
+    assert set(
+        await AsyncSeq((1, 2, 3)).map_unordered(add_one_sync).to_tuple()
+    ) == {
+        2,
+        3,
+        4,
+    }
+
+
+async def test_map_unordered_with_async_callable():
+    assert set(
+        await AsyncSeq((1, 2, 3)).map_unordered(add_one).to_tuple()
+    ) == {2, 3, 4}
+
+
+async def test_map_concurrent_preserves_input_order_under_jitter():
+    delays = (0.12, 0.02, 0.07)
+
+    async def mapper(index: int) -> int:
+        await asyncio.sleep(delays[index])
+        return index
+
+    assert await AsyncSeq((0, 1, 2)).map_concurrent(
+        mapper, limit=3
+    ).to_tuple() == (
+        0,
+        1,
+        2,
+    )
+
+
+async def test_map_unordered_yields_in_completion_order():
+    delays = (0.12, 0.02, 0.07)
+
+    async def mapper(index: int) -> int:
+        await asyncio.sleep(delays[index])
+        return index
+
+    assert await AsyncSeq((0, 1, 2)).map_unordered(
+        mapper, limit=3
+    ).to_tuple() == (
+        1,
+        2,
+        0,
+    )
+
+
+async def test_map_concurrent_respects_limit():
+    in_flight = 0
+    peak_in_flight = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal in_flight, peak_in_flight
+        in_flight += 1
+        peak_in_flight = max(peak_in_flight, in_flight)
+        try:
+            await asyncio.sleep(0.02)
+            return item
+        finally:
+            in_flight -= 1
+
+    result = (
+        await AsyncSeq(range(10)).map_concurrent(mapper, limit=3).to_tuple()
+    )
+
+    assert result == tuple(range(10))
+    assert peak_in_flight <= 3
+    assert peak_in_flight >= 2
+
+
+async def test_map_concurrent_leaves_no_tasks_after_early_exit():
+    async def mapper(item: int) -> int:
+        await asyncio.sleep(0.05)
+        return item
+
+    result = (
+        await AsyncSeq(range(5))
+        .map_concurrent(mapper, limit=5)
+        .take(1)
+        .to_tuple()
+    )
+
+    assert result == (0,)
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_map_unordered_leaves_no_tasks_after_early_exit():
+    async def mapper(item: int) -> int:
+        if item == 0:
+            return item
+        await asyncio.sleep(10)
+        return item
+
+    result = (
+        await AsyncSeq(range(5))
+        .map_unordered(mapper, limit=5)
+        .take(1)
+        .to_tuple()
+    )
+
+    assert result == (0,)
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_aclose_cancels_in_flight_map_concurrent_work():
+    finalized = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal finalized
+        try:
+            if item == 0:
+                return item
+            await asyncio.sleep(10)
+            return item
+        finally:
+            finalized += 1
+
+    seq = AsyncSeq(range(5)).map_concurrent(mapper, limit=5)
+
+    assert await seq.__anext__() == 0
+    await seq.aclose()
+
+    assert finalized == 5
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_chunked_exact_multiple():
+    result = await AsyncSeq(range(6)).chunked(2).to_list()
+
+    assert result == [(0, 1), (2, 3), (4, 5)]
+    assert all(isinstance(chunk, tuple) for chunk in result)
+
+
+async def test_chunked_yields_short_final_chunk():
+    result = await AsyncSeq(range(5)).chunked(2).to_list()
+
+    assert result == [(0, 1), (2, 3), (4,)]
+    assert all(isinstance(chunk, tuple) for chunk in result)
+
+
+async def test_throttle_enforces_minimum_interval():
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+
+    result = await AsyncSeq(range(4)).throttle(per_second=20).to_list()
+
+    elapsed = loop.time() - start
+    assert result == [0, 1, 2, 3]
+    assert elapsed >= 0.1
+
+
+async def test_timeout_total_fires():
+    async def slow_source():
+        for value in range(5):
+            await asyncio.sleep(0.05)
+            yield value
+
+    with pytest.raises(TimeoutError):
+        await AsyncSeq(slow_source()).timeout(total=0.02).to_list()
+
+
+async def test_timeout_total_does_not_fire():
+    assert await AsyncSeq(range(3)).timeout(total=5).to_list() == [0, 1, 2]
+
+
+async def test_timeout_per_item_fires():
+    async def slow_source():
+        yield 1
+        await asyncio.sleep(0.2)
+        yield 2
+
+    with pytest.raises(TimeoutError):
+        await AsyncSeq(slow_source()).timeout(per_item=0.02).to_list()
+
+
+async def test_timeout_per_item_does_not_fire():
+    assert await AsyncSeq(range(3)).timeout(per_item=5).to_list() == [
+        0,
+        1,
+        2,
+    ]
