@@ -4,6 +4,9 @@ target-version = ["py312"]
 
 [tool.ruff]
 target-version = "py312"
+# Must track [tool.black] line-length, or `ruff format` and `black` fight
+# each other over the file width.
+line-length = 79
 
 [tool.ruff.lint]
 ignore = [
