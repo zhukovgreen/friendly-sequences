@@ -502,6 +502,32 @@ async def test_aclose_cancels_in_flight_map_concurrent_work():
     assert remaining == set()
 
 
+async def test_aclose_genuinely_cancels_slow_map_concurrent_work():
+    cancelled = 0
+
+    async def work(item: int) -> int:
+        nonlocal cancelled
+        try:
+            await asyncio.sleep(0.001 if item == 0 else 1.0)
+        except asyncio.CancelledError:
+            cancelled += 1
+            raise
+        else:
+            return item
+
+    seq = AsyncSeq(range(5)).map_concurrent(work, limit=5)
+
+    assert await seq.__anext__() == 0
+
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    await seq.aclose()
+    elapsed = loop.time() - started_at
+
+    assert cancelled > 0
+    assert elapsed < 0.5
+
+
 async def test_chunked_exact_multiple():
     result = await AsyncSeq(range(6)).chunked(2).to_list()
 
@@ -570,6 +596,269 @@ async def test_to_async_bridges_full_chain():
     assert await Seq(range(5)).filter(is_even).to_async().map_concurrent(
         add_one
     ).to_list() == [1, 3, 5]
+
+
+async def test_map_concurrent_propagates_error_and_drains_tasks():
+    started = 0
+    finalized = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal started, finalized
+        started += 1
+        try:
+            if item == 2:
+                raise ValueError("boom")
+            await asyncio.sleep(0.05)
+            return item
+        finally:
+            finalized += 1
+
+    with pytest.raises(ValueError, match="boom"):
+        await AsyncSeq(range(5)).map_concurrent(mapper, limit=5).to_list()
+
+    assert started == finalized
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_map_unordered_propagates_error_and_drains_tasks():
+    started = 0
+    finalized = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal started, finalized
+        started += 1
+        try:
+            if item == 2:
+                raise ValueError("boom")
+            await asyncio.sleep(0.05)
+            return item
+        finally:
+            finalized += 1
+
+    with pytest.raises(ValueError, match="boom"):
+        await AsyncSeq(range(5)).map_unordered(mapper, limit=5).to_list()
+
+    assert started == finalized
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_map_unordered_respects_limit():
+    in_flight = 0
+    peak_in_flight = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal in_flight, peak_in_flight
+        in_flight += 1
+        peak_in_flight = max(peak_in_flight, in_flight)
+        try:
+            await asyncio.sleep(0.02)
+            return item
+        finally:
+            in_flight -= 1
+
+    result = (
+        await AsyncSeq(range(10)).map_unordered(mapper, limit=3).to_tuple()
+    )
+
+    assert set(result) == set(range(10))
+    assert peak_in_flight <= 3
+    assert peak_in_flight >= 2
+
+
+async def test_aclose_cancels_in_flight_map_unordered_work():
+    finalized = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal finalized
+        try:
+            if item == 0:
+                return item
+            await asyncio.sleep(10)
+            return item
+        finally:
+            finalized += 1
+
+    seq = AsyncSeq(range(5)).map_unordered(mapper, limit=5)
+
+    assert await seq.__anext__() == 0
+    await seq.aclose()
+
+    assert finalized == 5
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
+
+
+async def test_aclose_genuinely_cancels_slow_map_unordered_work():
+    cancelled = 0
+
+    async def work(item: int) -> int:
+        nonlocal cancelled
+        try:
+            await asyncio.sleep(0.001 if item == 0 else 1.0)
+        except asyncio.CancelledError:
+            cancelled += 1
+            raise
+        else:
+            return item
+
+    seq = AsyncSeq(range(5)).map_unordered(work, limit=5)
+
+    assert await seq.__anext__() == 0
+
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    await seq.aclose()
+    elapsed = loop.time() - started_at
+
+    assert cancelled > 0
+    assert elapsed < 0.5
+
+
+async def test_map_concurrent_over_empty_source():
+    assert await AsyncSeq[int](()).map_concurrent(add_one).to_tuple() == ()
+
+
+async def test_map_unordered_over_empty_source():
+    assert await AsyncSeq[int](()).map_unordered(add_one).to_tuple() == ()
+
+
+async def test_map_concurrent_limit_larger_than_number_of_items():
+    assert await AsyncSeq((1, 2, 3)).map_concurrent(
+        add_one, limit=100
+    ).to_tuple() == (2, 3, 4)
+
+
+async def test_map_unordered_limit_larger_than_number_of_items():
+    assert set(
+        await AsyncSeq((1, 2, 3)).map_unordered(add_one, limit=100).to_tuple()
+    ) == {2, 3, 4}
+
+
+async def test_map_concurrent_streams_a_bounded_window_of_the_source():
+    pulled = 0
+
+    async def counting_source():
+        nonlocal pulled
+        for i in range(1000):
+            pulled += 1
+            yield i
+
+    async def slow(item: int) -> int:
+        await asyncio.sleep(0.01)
+        return item
+
+    seq = AsyncSeq(counting_source()).map_concurrent(slow, limit=5)
+    try:
+        assert await seq.__anext__() == 0
+    finally:
+        await seq.aclose()
+
+    assert pulled <= 10
+
+
+async def test_map_unordered_streams_a_bounded_window_of_the_source():
+    pulled = 0
+
+    async def counting_source():
+        nonlocal pulled
+        for i in range(1000):
+            pulled += 1
+            yield i
+
+    async def slow(item: int) -> int:
+        await asyncio.sleep(0.01)
+        return item
+
+    seq = AsyncSeq(counting_source()).map_unordered(slow, limit=5)
+    try:
+        await seq.__anext__()
+    finally:
+        await seq.aclose()
+
+    assert pulled <= 10
+
+
+async def test_map_concurrent_limit_one_is_strictly_sequential():
+    in_flight = 0
+    peak_in_flight = 0
+
+    async def mapper(item: int) -> int:
+        nonlocal in_flight, peak_in_flight
+        in_flight += 1
+        peak_in_flight = max(peak_in_flight, in_flight)
+        try:
+            await asyncio.sleep(0.01)
+            return item
+        finally:
+            in_flight -= 1
+
+    result = (
+        await AsyncSeq(range(5)).map_concurrent(mapper, limit=1).to_tuple()
+    )
+
+    assert result == tuple(range(5))
+    assert peak_in_flight == 1
+
+
+async def test_integration_sync_to_async_bridge_under_concurrency():
+    def is_even(i: int) -> bool:
+        return i % 2 == 0
+
+    async def double(i: int) -> int:
+        await asyncio.sleep(0.01)
+        return i * 2
+
+    result = await (
+        Seq(range(10))
+        .filter(is_even)
+        .to_async()
+        .map_concurrent(double, limit=3)
+        .chunked(2)
+        .to_list()
+    )
+
+    assert result == [(0, 4), (8, 12), (16,)]
+    assert all(isinstance(chunk, tuple) for chunk in result)
+
+
+async def test_integration_sort_feeds_map_concurrent():
+    drained = False
+
+    async def source():
+        nonlocal drained
+        for value in (3, 1, 2):
+            yield value
+        drained = True
+
+    async def double(i: int) -> int:
+        return i * 2
+
+    pipeline = AsyncSeq(source()).sort().map_concurrent(double, limit=2)
+    assert drained is False
+
+    assert await pipeline.to_tuple() == (2, 4, 6)
+    assert drained is True
+
+
+async def test_integration_early_exit_through_full_pipeline_leaves_no_tasks():
+    async def slow_double(i: int) -> int:
+        await asyncio.sleep(0.05)
+        return i * 2
+
+    result = await (
+        AsyncSeq(range(1000))
+        .filter(lambda i: i % 2 == 0)
+        .map_concurrent(slow_double, limit=10)
+        .chunked(3)
+        .take(1)
+        .to_tuple()
+    )
+
+    assert result == ((0, 4, 8),)
+    remaining = asyncio.all_tasks() - {asyncio.current_task()}
+    assert remaining == set()
 
 
 if TYPE_CHECKING:
