@@ -72,7 +72,9 @@ def test_flatmap():
         "a!",
         "b!",
     )
-    assert Seq[Seq[str]](Seq((("a",), ("b",)))).flat_map(foo).to_tuple() == (
+    assert Seq[Seq[str]]((Seq(("a",)), Seq(("b",)))).flat_map(
+        foo
+    ).to_tuple() == (
         "a!",
         "b!",
     )

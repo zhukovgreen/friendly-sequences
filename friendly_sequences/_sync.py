@@ -11,7 +11,15 @@ import attrs
 
 __all__ = ("Seq",)
 
+if PT.TYPE_CHECKING:  # pragma: nocover
+    from _typeshed import SupportsRichComparison
+
+
 T_co = PT.TypeVar("T_co", covariant=True)
+
+
+def _to_iterator[T](some: Iterable[T]) -> Iterator[T]:
+    return iter(some)
 
 
 @attrs.frozen(
@@ -44,7 +52,7 @@ class Seq(Iterator[T_co]):
     """
 
     some: Iterator[T_co] = attrs.field(
-        converter=lambda some: iter(some),  # noqa: PLW0108
+        converter=_to_iterator,
     )
 
     def map[U](
@@ -85,7 +93,10 @@ class Seq(Iterator[T_co]):
         self,
         func: Callable[[T_co], PT.TypeGuard[U] | bool],
     ) -> Seq[U]:
-        return Seq(filter(func, self))
+        return PT.cast(
+            "Seq[U]",
+            Seq(item for item in self if func(item)),
+        )
 
     def fold[U](
         self,
@@ -113,12 +124,12 @@ class Seq(Iterator[T_co]):
     ) -> Seq[T_co]:
         return Seq(itertools.islice(self, n))
 
-    def sort(
-        self,
+    def sort[S: SupportsRichComparison](
+        self: Seq[S],
         *,
         key: None = None,
         reverse: bool = False,
-    ) -> Seq[T_co]:
+    ) -> Seq[S]:
         return Seq(
             sorted(
                 self,
