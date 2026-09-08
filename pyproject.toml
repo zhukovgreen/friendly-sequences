@@ -92,6 +92,7 @@ addopts = """
     -s
 """
 testpaths = "tests/"
+asyncio_mode = "auto"
 
 
 [tool.isort]
@@ -143,6 +144,7 @@ dev = [
     "mypy>=1.12",
     "ruff>=0.16",
     "coverage>=7.3.1",
+    "pytest-asyncio>=1.0",
 ]
 
 [tool.pdm.version]
