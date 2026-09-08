@@ -14,6 +14,8 @@ __all__ = ("Seq",)
 if PT.TYPE_CHECKING:  # pragma: nocover
     from _typeshed import SupportsRichComparison
 
+    from friendly_sequences._async import AsyncSeq
+
 
 T_co = PT.TypeVar("T_co", covariant=True)
 
@@ -201,6 +203,15 @@ class Seq(Iterator[T_co]):
         self,
     ) -> bool:
         return any(self)
+
+    def to_async(
+        self,
+    ) -> AsyncSeq[T_co]:
+        # Runtime import: a module-level one would create a
+        # _sync -> _async -> __init__ -> _sync cycle.
+        from friendly_sequences._async import AsyncSeq  # noqa: PLC0415
+
+        return AsyncSeq(self)
 
     def __iter__(  # noqa: PYI034
         self,

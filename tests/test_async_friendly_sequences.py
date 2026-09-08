@@ -1,6 +1,6 @@
 import asyncio
 
-from typing import TypeGuard
+from typing import TYPE_CHECKING, TypeGuard
 
 import pytest
 
@@ -557,3 +557,20 @@ async def test_timeout_per_item_does_not_fire():
         1,
         2,
     ]
+
+
+async def test_to_async_returns_async_seq_with_same_elements():
+    assert await Seq((1, 2, 3)).to_async().to_tuple() == (1, 2, 3)
+
+
+async def test_to_async_bridges_full_chain():
+    def is_even(i: int) -> bool:
+        return i % 2 == 0
+
+    assert await Seq(range(5)).filter(is_even).to_async().map_concurrent(
+        add_one
+    ).to_list() == [1, 3, 5]
+
+
+if TYPE_CHECKING:
+    reveal_type(Seq[int]((1, 2)).to_async())  # noqa: F821
