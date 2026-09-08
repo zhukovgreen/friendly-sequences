@@ -268,12 +268,12 @@ class AsyncSeq(AsyncIterator[T_co]):
 
         return AsyncSeq(gen())
 
-    def sort(
-        self,
+    def sort[S: SupportsRichComparison](
+        self: AsyncSeq[S],
         *,
         key: None = None,
         reverse: bool = False,
-    ) -> AsyncSeq[T_co]:
+    ) -> AsyncSeq[S]:
         """Sort, draining lazily on the first ``__anext__``.
 
         This stays a plain (non-``async def``) method returning an
@@ -282,24 +282,19 @@ class AsyncSeq(AsyncIterator[T_co]):
         fluent chain (``await (await seq.sort()).to_list()``). Forced by
         async, not a style choice.
 
-        ``AsyncSeq``'s converter is a named, typed function, unlike
-        ``Seq``'s untyped-lambda one, so mypy actually enforces
-        ``sorted()``'s ``SupportsRichComparison`` bound here instead of
-        silently treating it as unconstrained. The cast below is the same
-        kind of escape hatch ``Seq.sum`` already uses for the equivalent
-        gap in ``sum()``'s builtin signature.
+        ``S`` carries ``sorted()``'s ``SupportsRichComparison`` bound so
+        the body type-checks without casts. Note this documents intent
+        rather than guarding callers: mypy solves ``S`` from the element
+        type without enforcing the bound through the self-type, so
+        ``AsyncSeq[Unsortable].sort()`` still type-checks and fails at
+        runtime, exactly as ``Seq.sort`` does.
         """
 
-        async def gen() -> AsyncIterator[T_co]:
+        async def gen() -> AsyncIterator[S]:
             async with _closing(self.some) as upstream:
                 items = [item async for item in upstream]
-            ordered = sorted(
-                PT.cast("list[SupportsRichComparison]", items),
-                key=key,
-                reverse=reverse,
-            )
-            for sorted_item in ordered:
-                yield PT.cast(T_co, sorted_item)
+            for sorted_item in sorted(items, key=key, reverse=reverse):
+                yield sorted_item
 
         return AsyncSeq(gen())
 
