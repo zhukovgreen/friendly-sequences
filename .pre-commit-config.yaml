@@ -49,6 +49,10 @@ repos:
         language: system
         entry: mypy
         types: [python]
+        # mypy's cache is a single sqlite metastore; pre-commit's default
+        # parallel partitioning makes concurrent runs race on it and crash
+        # with "database is locked" whenever the cache is cold (i.e. in CI).
+        require_serial: true
         exclude: *default-py-exclude
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
